@@ -1,0 +1,17 @@
+# Render blueprint. Import this repository at render.com and it picks this up.
+services:
+  - type: web
+    name: micropark-mis-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Uncomment these two to switch on a username and password.
+      # - key: DASHBOARD_USER
+      #   sync: false
+      # - key: DASHBOARD_PASS
+      #   sync: false
