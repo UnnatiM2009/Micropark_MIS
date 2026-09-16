@@ -30,7 +30,11 @@ SHEET_MAP = {
     "7 Orders": "orders",
     "8 Daily Stock": "stock",
     "9 Warehouse Ops": "wh_ops",
+    "10 Returns Damaged": "returns",
     "11 Complaints": "complaints",
+    "12 Temperature Log": "temperature",
+    "10 Returns Damaged": "returns",
+    "12 Temperature Log": "temperature",
 }
 
 # template heading -> internal column name
@@ -82,12 +86,49 @@ COLUMN_MAP = {
     "Man-hours Worked": "manhours",
     "Storage Capacity (Pallets)": "capacity_pallets",
     "Occupied (Pallets)": "occupied_pallets",
+    "Return Ref No": "return_ref",
+    "Return Date": "date",
+    "Type": "type",
+    "Qty": "qty",
+    "Reason": "reason",
+    "Condition": "condition",
+    "Action Taken": "action",
+    "Zone / Area": "zone",
+    "Time Slot": "slot",
+    "Min Temp (C)": "min_temp",
+    "Max Temp (C)": "max_temp",
+    "Excursion (Y/N)": "excursion",
+    "Orders Received": "orders_received",
+    "Orders Picked": "orders_picked",
+    "Orders Packed": "orders_packed",
+    "Orders Dispatched": "orders_dispatched",
+    "Opening Qty": "opening_stock",
+    "Adjustment Qty": "adjustment_qty",
+    "Cycle Counts Done": "cycle_counts",
+    "Count Variance (Units)": "count_variance",
     "Complaint No": "complaint_no",
     "Complaint Date": "date",
     "Severity": "severity",
     "Status": "status",
     "Closure Date": "closure_date",
     "Root Cause": "root_cause",
+    # returns and damages
+    "Return Ref No": "return_ref",
+    "Return Date": "date",
+    "Type": "rtype",
+    "Qty": "qty",
+    "Reason": "reason",
+    "Condition": "condition",
+    "Action Taken": "action",
+    # temperature log
+    "Zone / Area": "zone",
+    "Time Slot": "slot",
+    "Min Temp (C)": "min_temp",
+    "Max Temp (C)": "max_temp",
+    "Excursion (Y/N)": "excursion",
+    # pharma handling
+    "Company / Principal": "company",
+    "FEFO Compliant (Y/N)": "fefo_ok",
 }
 
 DATE_COLS = [
@@ -120,6 +161,22 @@ def _from_excel(path: Path) -> dict:
     return tables
 
 
+def _derive(tables: dict) -> dict:
+    """Build the two tables the screens need but the template does not hold directly."""
+    stock = tables.get("stock")
+
+    # a daily warehouse level ledger, for the stock reconciliation view
+    if "stock_ledger" not in tables and stock is not None and not stock.empty and "date" in stock.columns:
+        cols = [c for c in ("opening_qty", "inward_qty", "dispatch_qty", "adjustment_qty", "closing_qty")
+                if c in stock.columns]
+        if cols:
+            tables["stock_ledger"] = (
+                stock.groupby(["date", "warehouse"], as_index=False)[cols].sum().sort_values("date")
+            )
+
+    return tables
+
+
 def load(force: bool = False) -> dict:
     """Return the tables, from cache unless force=True."""
     if _cache["data"] is not None and not force:
@@ -132,6 +189,7 @@ def load(force: bool = False) -> dict:
             thin = [k for k in ("dispatch", "orders", "stock") if k not in data or len(data[k]) < 5]
             if thin:
                 raise ValueError(f"not enough rows yet in: {thin}")
+            data = _derive(data)
             _cache.update(data=data, source=f"Excel ({EXCEL_PATH.name})", loaded_at=dt.datetime.now())
             return data
         except Exception as exc:  # fall back rather than crash the dashboard

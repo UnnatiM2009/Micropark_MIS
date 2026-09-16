@@ -46,6 +46,8 @@
     <button class="tab" role="tab" aria-selected="true" data-tab="overview">Overview</button>
     <button class="tab" role="tab" aria-selected="false" data-tab="inventory">Inventory</button>
     <button class="tab" role="tab" aria-selected="false" data-tab="dispatch">Dispatch</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="warehouse">Warehouse</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="compliance">Compliance</button>
     <button class="tab" role="tab" aria-selected="false" data-tab="complaints">Complaints</button>
   </nav>
 
@@ -107,10 +109,46 @@
         </div>
       </div>
     </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Stock reconciliation</h2>
+      <p class="sub">Opening plus inward, less dispatch, plus adjustment, against closing stock</p>
+      <div class="table-scroll"><table id="tbl-recon"></table></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Batch-wise stock</h2>
+      <p class="sub">Largest batches in hand, with expiry and blocked quantity</p>
+      <div class="table-scroll" style="max-height:380px;overflow-y:auto">
+        <table id="tbl-batch"></table>
+      </div>
+    </div>
   </section>
 
   <!-- ---------------------------------------------------------- dispatch -->
   <section id="panel-dispatch" class="hidden">
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Company-wise dispatch</h2>
+        <p class="sub">Volume handled for each principal</p>
+        <div class="chart-box"><canvas id="ch-company"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Ordered against dispatched</h2>
+        <p class="sub">Daily quantity, to show what is being held back</p>
+        <div class="chart-box"><canvas id="ch-ovd"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Delivery status</h2>
+        <p class="sub">Where the period's consignments stand today</p>
+        <div class="chart-box short"><canvas id="ch-delstatus"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Delivery time spread</h2>
+        <p class="sub">Days taken from dispatch to delivery</p>
+        <div class="chart-box short"><canvas id="ch-tat"></canvas></div>
+      </div>
+    </div>
     <div class="grid two" style="margin-bottom:16px">
       <div class="panel">
         <h2>Why orders are pending</h2>
@@ -128,6 +166,92 @@
       <p class="sub">Oldest first</p>
       <div class="table-scroll" style="max-height:420px;overflow-y:auto">
         <table id="tbl-pending"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- warehouse -->
+  <section id="panel-warehouse" class="hidden">
+    <div class="kpi-strip" id="pick-tiles" style="margin-bottom:16px"></div>
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Picking and packing</h2>
+        <p class="sub">Orders that reached each stage in the period</p>
+        <div class="chart-box"><canvas id="ch-picking"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Orders received against dispatched</h2>
+        <p class="sub">Daily, to show the backlog building or clearing</p>
+        <div class="chart-box"><canvas id="ch-pickdaily"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="panel">
+        <h2>Productivity and space</h2>
+        <p class="sub">Lines handled per man-hour, and pallet positions occupied</p>
+        <div class="chart-box tall"><canvas id="ch-prod2"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Pending GRN</h2>
+        <p class="sub">Received but not yet posted, oldest first</p>
+        <div class="table-scroll" style="max-height:320px;overflow-y:auto">
+          <table id="tbl-grn"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- compliance -->
+  <section id="panel-compliance" class="hidden">
+    <div class="kpi-strip" id="comp-tiles" style="margin-bottom:16px"></div>
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>FEFO compliance</h2>
+        <p class="sub">Share of lines picked in correct expiry order, day by day</p>
+        <div class="chart-box"><canvas id="ch-fefo"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Cold room temperature</h2>
+        <p class="sub">Daily low and high against the permitted band</p>
+        <div class="chart-box"><canvas id="ch-temp"></canvas></div>
+      </div>
+    </div>
+    <div class="grid three" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Returns by type</h2>
+        <p class="sub">Units received back in the period</p>
+        <div class="chart-box short"><canvas id="ch-rettype"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Reason for return</h2>
+        <p class="sub">Units, by reason recorded</p>
+        <div class="chart-box short"><canvas id="ch-retreason"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Action taken</h2>
+        <p class="sub">What was done with the stock</p>
+        <div class="chart-box short"><canvas id="ch-retaction"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Temperature by zone</h2>
+        <p class="sub">Readings, range recorded and excursions</p>
+        <div class="table-scroll"><table id="tbl-zones"></table></div>
+      </div>
+      <div class="panel">
+        <h2>Temperature excursions</h2>
+        <p class="sub">Every reading outside the permitted band</p>
+        <div class="table-scroll" style="max-height:300px;overflow-y:auto">
+          <table id="tbl-excursion"></table>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Returns, damage and recall register</h2>
+      <p class="sub">Most recent first</p>
+      <div class="table-scroll" style="max-height:380px;overflow-y:auto">
+        <table id="tbl-returns"></table>
       </div>
     </div>
   </section>
@@ -150,6 +274,18 @@
         <h2>Ageing of open complaints</h2>
         <p class="sub">Days since it was raised</p>
         <div class="chart-box short"><canvas id="ch-cmp-age"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Client-wise complaints</h2>
+        <p class="sub">Clients raising the most complaints</p>
+        <div class="chart-box"><canvas id="ch-cmp-client"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Warehouse-wise complaints</h2>
+        <p class="sub">Where the complaints are coming from</p>
+        <div class="chart-box"><canvas id="ch-cmp-wh"></canvas></div>
       </div>
     </div>
     <div class="panel">

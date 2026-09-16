@@ -123,7 +123,27 @@ COMPLAINT_CATEGORIES = [
     "Temperature Excursion",
 ]
 
+RETURN_REASONS = [
+    "Short expiry", "Damaged in transit", "Wrong supply", "Client cancelled",
+    "Breakage at unloading", "Principal recall", "Excess supply",
+]
+
+ZONES = ["Ambient Zone A", "Ambient Zone B", "Cold Room 1"]
+
 ROOT_CAUSES = ["Warehouse", "Transport", "Process", "System", "Client Side"]
+
+RETURN_TYPES = ["Sales Return", "Damage", "Expiry", "Recall", "Breakage", "Wrong Supply"]
+
+RETURN_REASONS = [
+    "Short expiry at client end", "Damaged in transit", "Excess supply",
+    "Ordered in error", "Batch recalled by principal", "Packing damaged",
+    "Cold chain not maintained", "Wrong item supplied",
+]
+
+RETURN_ACTIONS = ["Restocked", "Quarantined", "Returned to Principal", "Destroyed", "Pending Decision"]
+
+# warehouses holding cold chain product
+COLD_CHAIN_SITES = ["Bhiwandi", "Nagpur", "Pune", "Bangalore"]
 
 PENDING_REASONS = [
     "Stock not available",
@@ -217,6 +237,10 @@ def build():
 
     # ---------------------------------------------------------------- daily movement
     inward, dispatch, orders, wh_ops, complaints = [], [], [], [], []
+    returns, temperature = [], []
+    ret_seq = 0
+    returns, temperature = [], []
+    ret_seq = 0
     order_seq = 0
     cmp_seq = 0
 
@@ -304,10 +328,16 @@ def build():
                             expected_delivery=disp_date + dt.timedelta(days=committed),
                             actual_delivery=delivered if delivered <= today else None,
                             pod_received="Y" if delivered <= today - dt.timedelta(days=2) and rnd.random() > 0.08 else "N",
+                            fefo_ok="Y" if rnd.random() > 0.035 else "N",
                         )
                     )
                     day_out_qty += disp_qty
                     day_out_lines += 1
+
+            # ----- the picking funnel: each step can only lose orders, never gain
+            picked_n = max(0, n_orders - rnd.choice([0, 0, 0, 0, 1, 1, 2]))
+            packed_n = max(0, picked_n - rnd.choice([0, 0, 0, 0, 0, 1]))
+            dispatched_n = max(0, packed_n - rnd.choice([0, 0, 0, 0, 0, 1]))
 
             # ----- warehouse operations for the day
             in_qty = sum(r["qty"] for r in inward if r["date"] == day and r["warehouse"] == wh)
@@ -329,8 +359,70 @@ def build():
                     manhours=manhours,
                     capacity_pallets=capacity,
                     occupied_pallets=int(capacity * rnd.uniform(0.62, 0.93)),
+                    opening_stock=0,       # filled in below, once the day is known
+                    adjustment_qty=rnd.choice([0] * 9 + [-rnd.randint(2, 40), rnd.randint(2, 40)]),
+                    closing_stock=0,
+                    orders_received=n_orders,
+                    orders_picked=picked_n,
+                    orders_packed=packed_n,
+                    orders_dispatched=dispatched_n,
+                    cycle_counts=rnd.randint(15, 60),
+                    count_variance=rnd.choice([0] * 4 + [rnd.randint(1, 18)]),
                 )
             )
+
+            # ----- returns, damage and the occasional recall
+            if rnd.random() < 0.22 * factor:
+                ret_seq += 1
+                rtype = rnd.choice(["Sales Return"] * 5 + ["Damage"] * 3 + ["Expiry"] * 2 + ["Breakage", "Recall"])
+                saleable = rtype in ("Sales Return",) and rnd.random() > 0.4
+                returns.append(
+                    dict(
+                        return_ref=f"RET-{ret_seq:04d}",
+                        date=day,
+                        type=rtype,
+                        client_code=rnd.choice(client_codes),
+                        warehouse=wh,
+                        item_code=rnd.choice(item_codes),
+                        batch_no=f"B{rnd.randint(2300, 2609)}{rnd.randint(1, 9)}",
+                        qty=rnd.randint(5, 260),
+                        reason=rnd.choice(RETURN_REASONS),
+                        condition="Saleable" if saleable else "Non-saleable",
+                        action="Restocked" if saleable else rnd.choice(
+                            ["Quarantined", "Returned to Principal", "Destroyed", "Pending Decision"]),
+                    )
+                )
+
+            # ----- temperature readings, two slots a day per zone
+            zones_here = [z for z in ZONES if not z.startswith("Cold") or wh in COLD_CHAIN_SITES]
+            for zone in zones_here:
+                cold = zone.startswith("Cold")
+                for slot in ("Morning", "Evening"):
+                    if cold:
+                        lo = round(rnd.uniform(2.3, 3.8), 1)
+                        hi = round(lo + rnd.uniform(1.8, 3.6), 1)
+                        limit_lo, limit_hi = 2.0, 8.0
+                    else:
+                        lo = round(rnd.uniform(18.5, 21.0), 1)
+                        hi = round(lo + rnd.uniform(1.5, 3.0), 1)
+                        limit_lo, limit_hi = 15.0, 25.0
+                    if rnd.random() < 0.012:          # the occasional excursion
+                        hi = round(limit_hi + rnd.uniform(0.4, 2.6), 1)
+                    breach = hi > limit_hi or lo < limit_lo
+                    temperature.append(
+                        dict(
+                            date=day,
+                            warehouse=wh,
+                            zone=zone,
+                            slot=slot,
+                            min_temp=lo,
+                            max_temp=hi,
+                            limit_low=limit_lo,
+                            limit_high=limit_hi,
+                            excursion="Y" if breach else "N",
+                            action="Reported and stock quarantined" if breach else "Not applicable",
+                        )
+                    )
 
             # ----- complaints, a few a week
             if rnd.random() < 0.28 * factor:
@@ -354,6 +446,29 @@ def build():
                     )
                 )
 
+    # ---------------------------------------------------------------- daily stock balance
+    # Work the balance backwards from the stock actually on hand today, so the
+    # reconciliation on the screen adds up instead of drifting.
+    ops_df = pd.DataFrame(wh_ops).sort_values(["warehouse", "date"]).reset_index(drop=True)
+    openings, closings = [], []
+    for wh in WAREHOUSE_NAMES:
+        rows = ops_df[ops_df["warehouse"] == wh]
+        net = int((rows["inward_qty"] - rows["outward_qty"] + rows["adjustment_qty"]).sum())
+        on_hand = int(stock.loc[stock["warehouse"] == wh, "closing_qty"].sum())
+        running = on_hand - net
+        for r in rows.itertuples():
+            opening = running
+            closing = opening + int(r.inward_qty) - int(r.outward_qty) + int(r.adjustment_qty)
+            openings.append((r.Index, opening))
+            closings.append((r.Index, closing))
+            running = closing
+    ops_df.loc[[i for i, _ in openings], "opening_stock"] = [v for _, v in openings]
+    ops_df.loc[[i for i, _ in closings], "closing_stock"] = [v for _, v in closings]
+    ops_df["opening_stock"] = ops_df["opening_stock"].astype(int)
+    ops_df["closing_stock"] = ops_df["closing_stock"].astype(int)
+
+    stock["date"] = today
+
     return dict(
         items=items,
         clients=clients,
@@ -362,6 +477,8 @@ def build():
         inward=pd.DataFrame(inward),
         dispatch=pd.DataFrame(dispatch),
         orders=pd.DataFrame(orders),
-        wh_ops=pd.DataFrame(wh_ops),
+        wh_ops=ops_df,
         complaints=pd.DataFrame(complaints),
+        returns=pd.DataFrame(returns),
+        temperature=pd.DataFrame(temperature),
     )

@@ -137,6 +137,56 @@ def api_complaints(warehouse: str = "All", days: int = Query(30, ge=1, le=365), 
     return kpis.complaints(warehouse, days)
 
 
+@app.get("/api/company-dispatch")
+def api_company_dispatch(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.company_dispatch(warehouse, days)
+
+
+@app.get("/api/order-vs-dispatch")
+def api_order_vs_dispatch(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.order_vs_dispatch(warehouse, days)
+
+
+@app.get("/api/delivery-status")
+def api_delivery_status(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.delivery_status(warehouse, days)
+
+
+@app.get("/api/picking-status")
+def api_picking_status(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.picking_status(warehouse, days)
+
+
+@app.get("/api/pending-grn")
+def api_pending_grn(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.pending_grn(warehouse, days)
+
+
+@app.get("/api/reconciliation")
+def api_reconciliation(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.reconciliation(warehouse, days)
+
+
+@app.get("/api/batch-stock")
+def api_batch_stock(warehouse: str = "All", _=Depends(guard)):
+    return kpis.batch_stock(warehouse)
+
+
+@app.get("/api/fefo")
+def api_fefo(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.fefo(warehouse, days)
+
+
+@app.get("/api/returns")
+def api_returns(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.returns(warehouse, days)
+
+
+@app.get("/api/temperature")
+def api_temperature(warehouse: str = "All", days: int = Query(30, ge=1, le=365), _=Depends(guard)):
+    return kpis.temperature(warehouse, days)
+
+
 @app.post("/api/refresh")
 def api_refresh(_=Depends(guard)):
     """Re-read the Excel file without restarting the server."""

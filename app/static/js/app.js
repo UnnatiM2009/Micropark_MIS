@@ -14,6 +14,10 @@ const THRESHOLDS = {
   open_complaints: { good: 3,  watch: 8,  direction: "lower" },
   pending_grn:     { good: 3,  watch: 8,  direction: "lower" },
   pending_orders:  { good: 10, watch: 25, direction: "lower" },
+  fefo:            { good: 99, watch: 97, direction: "higher" },
+  temp_compliance: { good: 99.5, watch: 98, direction: "higher" },
+  excursions:      { good: 0, watch: 3, direction: "lower" },
+  non_saleable:    { good: 500, watch: 2000, direction: "lower" },
 };
 
 function css(name) {
@@ -121,7 +125,7 @@ function showTab(name) {
   state.tab = name;
   document.querySelectorAll(".tab").forEach(b =>
     b.setAttribute("aria-selected", String(b.dataset.tab === name)));
-  ["overview", "inventory", "dispatch", "complaints"].forEach(t =>
+  ["overview", "inventory", "dispatch", "warehouse", "compliance", "complaints"].forEach(t =>
     document.getElementById("panel-" + t).classList.toggle("hidden", t !== name));
   loadTab(name);
 }
@@ -248,6 +252,35 @@ async function loadInventory() {
     } }),
   });
 
+  const [recon, batches] = await Promise.all([get("/api/reconciliation"), get("/api/batch-stock")]);
+
+  const reconRows = (recon.rows || []).concat(
+    recon.totals && (recon.rows || []).length
+      ? [Object.assign({ warehouse: "Total" }, recon.totals, { counts: "" })]
+      : []
+  );
+  table(document.getElementById("tbl-recon"), [
+    { key: "warehouse", label: "Warehouse" },
+    { key: "opening", label: "Opening", num: true },
+    { key: "inward", label: "Inward", num: true },
+    { key: "dispatch", label: "Dispatch", num: true },
+    { key: "adjustment", label: "Adjustment", num: true },
+    { key: "closing", label: "Closing", num: true },
+    { key: "difference", label: "Difference", num: true, flag: r => r.difference === 0 ? "flag-good" : "flag-breach" },
+    { key: "variance", label: "Count variance", num: true, flag: r => r.variance > 0 ? "flag-watch" : "" },
+  ], reconRows);
+
+  table(document.getElementById("tbl-batch"), [
+    { key: "item", label: "Item" },
+    { key: "company", label: "Company" },
+    { key: "batch", label: "Batch" },
+    { key: "expiry", label: "Expiry" },
+    { key: "days", label: "Days left", num: true, flag: r => r.days <= 30 ? "flag-breach" : (r.days <= 90 ? "flag-watch" : "") },
+    { key: "qty", label: "Qty", num: true },
+    { key: "blocked", label: "Blocked", num: true, flag: r => r.blocked > 0 ? "flag-watch" : "" },
+    { key: "warehouse", label: "Warehouse" },
+  ], batches.rows);
+
   table(document.getElementById("tbl-expiry"), [
     { key: "item", label: "Item" },
     { key: "batch", label: "Batch" },
@@ -259,9 +292,28 @@ async function loadInventory() {
 }
 
 async function loadDispatch() {
-  const [pending, transport] = await Promise.all([
-    get("/api/pending-orders"), get("/api/transporters"),
+  const [pending, transport, company, ovd, delivery] = await Promise.all([
+    get("/api/pending-orders"), get("/api/transporters"), get("/api/company-dispatch"),
+    get("/api/order-vs-dispatch"), get("/api/delivery-status"),
   ]);
+
+  barH("ch-company", company.labels || [], company.qty || []);
+
+  draw("ch-ovd", {
+    type: "line",
+    data: {
+      labels: ovd.labels || [],
+      datasets: [
+        { label: "Ordered", data: ovd.ordered || [], borderColor: css("--blue-soft"), borderWidth: 1.6, pointRadius: 0, tension: 0.25 },
+        { label: "Dispatched", data: ovd.dispatched || [], borderColor: css("--blue"), borderWidth: 2, pointRadius: 0, tension: 0.25 },
+      ],
+    },
+    options: baseOptions({ plugins: { legend: { display: true, position: "bottom", labels: { color: css("--ink-soft"), boxWidth: 10, font: { size: 11 } } } } }),
+  });
+
+  barV("ch-delstatus", (delivery.status || []).map(x => x.label), (delivery.status || []).map(x => x.count),
+       [css("--good"), css("--watch"), css("--blue"), css("--breach")]);
+  barV("ch-tat", (delivery.tat || []).map(x => x.label), (delivery.tat || []).map(x => x.count));
 
   draw("ch-reasons", {
     type: "bar",
@@ -331,6 +383,9 @@ async function loadComplaints() {
     } }),
   });
 
+  barH("ch-cmp-client", (d.by_client || []).map(x => x.label), (d.by_client || []).map(x => x.count));
+  barH("ch-cmp-wh", (d.by_warehouse || []).map(x => x.label), (d.by_warehouse || []).map(x => x.count), css("--blue-soft"));
+
   table(document.getElementById("tbl-cmp"), [
     { key: "no", label: "Complaint" },
     { key: "date", label: "Date" },
@@ -342,10 +397,181 @@ async function loadComplaints() {
   ], d.rows, "No complaint is open for this selection.");
 }
 
+
+/* a horizontal bar chart, used wherever the labels are long */
+function barH(id, labels, data, colour) {
+  draw(id, {
+    type: "bar",
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colour || css("--blue"), borderRadius: 2 }] },
+    options: baseOptions({ indexAxis: "y", scales: {
+      x: { grid: { color: css("--rule-soft") }, border: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 } } },
+      y: { grid: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 } } },
+    } }),
+  });
+}
+
+/* a plain vertical bar chart */
+function barV(id, labels, data, colours) {
+  draw(id, {
+    type: "bar",
+    data: { labels: labels, datasets: [{ data: data, backgroundColor: colours || css("--blue"), borderRadius: 2 }] },
+    options: baseOptions(),
+  });
+}
+
+function tiles(elId, list) {
+  document.getElementById(elId).innerHTML = list.map(t => {
+    const g = t.key ? grade(t.key, t.value) : "";
+    return '<div class="kpi ' + g + '"><div class="label">' + t.label + "</div>" +
+      '<div class="value">' + (t.unit === "%" ? t.value.toFixed(1) + "%" : t.value.toLocaleString("en-IN")) +
+      (t.unit && t.unit !== "%" ? '<span class="unit">' + t.unit + "</span>" : "") + "</div>" +
+      (t.hint ? '<div class="hint">' + t.hint + "</div>" : "") + "</div>";
+  }).join("");
+}
+
+async function loadWarehouse() {
+  const [pick, prod, grn] = await Promise.all([
+    get("/api/picking-status"), get("/api/productivity"), get("/api/pending-grn"),
+  ]);
+
+  tiles("pick-tiles", (pick.stages || []).map(s => ({
+    label: s.label, value: s.count, hint: s.pct + "% of orders received",
+  })));
+
+  barH("ch-picking", (pick.stages || []).map(s => s.label), (pick.stages || []).map(s => s.count));
+
+  draw("ch-pickdaily", {
+    type: "line",
+    data: {
+      labels: pick.labels || [],
+      datasets: [
+        { label: "Received", data: pick.received || [], borderColor: css("--blue-soft"), borderWidth: 1.6, pointRadius: 0, tension: 0.25 },
+        { label: "Dispatched", data: pick.dispatched || [], borderColor: css("--blue"), borderWidth: 2, pointRadius: 0, tension: 0.25 },
+      ],
+    },
+    options: baseOptions({ plugins: { legend: { display: true, position: "bottom", labels: { color: css("--ink-soft"), boxWidth: 10, font: { size: 11 } } } } }),
+  });
+
+  draw("ch-prod2", {
+    type: "line",
+    data: {
+      labels: prod.labels || [],
+      datasets: [
+        { label: "Lines per man-hour", data: prod.lines_per_manhour || [], borderColor: css("--good"), borderWidth: 2, pointRadius: 0, tension: 0.25, yAxisID: "y" },
+        { label: "Space used %", data: prod.space_util || [], borderColor: css("--watch"), borderWidth: 1.6, pointRadius: 0, tension: 0.25, borderDash: [4, 3], yAxisID: "y1" },
+      ],
+    },
+    options: baseOptions({
+      plugins: { legend: { display: true, position: "bottom", labels: { color: css("--ink-soft"), boxWidth: 10, font: { size: 11 } } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
+        y: { position: "left", grid: { color: css("--rule-soft") }, border: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 } } },
+        y1: { position: "right", min: 0, max: 100, grid: { display: false }, border: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 }, callback: v => v + "%" } },
+      },
+    }),
+  });
+
+  table(document.getElementById("tbl-grn"), [
+    { key: "grn", label: "GRN" },
+    { key: "date", label: "Date" },
+    { key: "age", label: "Days old", num: true, flag: r => r.age > 3 ? "flag-breach" : (r.age > 1 ? "flag-watch" : "") },
+    { key: "item", label: "Item" },
+    { key: "qty", label: "Qty", num: true },
+    { key: "status", label: "Status" },
+    { key: "warehouse", label: "Warehouse" },
+  ], grn.rows, "Every GRN in this period is posted.");
+}
+
+async function loadCompliance() {
+  const [fefo, ret, temp] = await Promise.all([
+    get("/api/fefo"), get("/api/returns"), get("/api/temperature"),
+  ]);
+
+  const tempTile = (temp.tiles || []).find(t => t.label === "Compliance");
+  const excTile = (temp.tiles || []).find(t => t.label === "Excursions");
+  const nonSale = (ret.tiles || []).find(t => t.label === "Non-saleable");
+  const damaged = (ret.tiles || []).find(t => t.label === "Damaged Units");
+  const recalls = (ret.tiles || []).find(t => t.label === "Recall Entries");
+
+  tiles("comp-tiles", [
+    { label: "FEFO Compliance", value: fefo.compliance || 0, unit: "%", key: "fefo", hint: (fefo.breaches || 0) + " lines picked out of order" },
+    { label: "Temperature Compliance", value: tempTile ? tempTile.value : 0, unit: "%", key: "temp_compliance", hint: "Readings within the permitted band" },
+    { label: "Excursions", value: excTile ? excTile.value : 0, key: "excursions", hint: "Readings outside the band" },
+    { label: "Damaged Units", value: damaged ? damaged.value : 0, hint: "At receipt and in returns" },
+    { label: "Non-saleable", value: nonSale ? nonSale.value : 0, key: "non_saleable", hint: "Cannot be sold again" },
+    { label: "Recall Entries", value: recalls ? recalls.value : 0, hint: "Batches recalled by the principal" },
+  ]);
+
+  draw("ch-fefo", {
+    type: "line",
+    data: {
+      labels: (fefo.trend || {}).labels || [],
+      datasets: [{ label: "FEFO %", data: (fefo.trend || {}).pct || [], borderColor: css("--good"), borderWidth: 2, pointRadius: 0, tension: 0.25 }],
+    },
+    options: baseOptions({ scales: {
+      x: { grid: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
+      y: { min: 80, max: 100, grid: { color: css("--rule-soft") }, border: { display: false }, ticks: { color: css("--ink-soft"), font: { size: 10 }, callback: v => v + "%" } },
+    } }),
+  });
+
+  const tt = temp.trend || {};
+  draw("ch-temp", {
+    type: "line",
+    data: {
+      labels: tt.labels || [],
+      datasets: [
+        { label: "High", data: tt.max_temp || [], borderColor: css("--breach"), borderWidth: 1.8, pointRadius: 0, tension: 0.25 },
+        { label: "Low", data: tt.min_temp || [], borderColor: css("--blue"), borderWidth: 1.8, pointRadius: 0, tension: 0.25 },
+        { label: "Upper limit", data: (tt.labels || []).map(() => tt.limit_high), borderColor: css("--watch"), borderWidth: 1.2, borderDash: [5, 4], pointRadius: 0 },
+        { label: "Lower limit", data: (tt.labels || []).map(() => tt.limit_low), borderColor: css("--watch"), borderWidth: 1.2, borderDash: [5, 4], pointRadius: 0 },
+      ],
+    },
+    options: baseOptions({ plugins: { legend: { display: true, position: "bottom", labels: { color: css("--ink-soft"), boxWidth: 10, font: { size: 11 } } } } }),
+  });
+
+  barH("ch-rettype", (ret.by_type || []).map(x => x.label), (ret.by_type || []).map(x => x.qty));
+  barH("ch-retreason", (ret.by_reason || []).map(x => x.label), (ret.by_reason || []).map(x => x.qty), css("--blue-soft"));
+  barH("ch-retaction", (ret.by_action || []).map(x => x.label), (ret.by_action || []).map(x => x.qty), css("--watch"));
+
+  table(document.getElementById("tbl-zones"), [
+    { key: "zone", label: "Zone" },
+    { key: "limit", label: "Permitted" },
+    { key: "min_temp", label: "Lowest", num: true, render: v => v + " C" },
+    { key: "max_temp", label: "Highest", num: true, render: v => v + " C" },
+    { key: "readings", label: "Readings", num: true },
+    { key: "excursions", label: "Excursions", num: true, flag: r => r.excursions > 0 ? "flag-breach" : "flag-good" },
+    { key: "compliance", label: "Compliance", num: true, render: v => v.toFixed(1) + "%" },
+  ], temp.zones);
+
+  table(document.getElementById("tbl-excursion"), [
+    { key: "date", label: "Date" },
+    { key: "zone", label: "Zone" },
+    { key: "slot", label: "Slot" },
+    { key: "min_temp", label: "Low", num: true, render: v => v + " C" },
+    { key: "max_temp", label: "High", num: true, render: v => v + " C", flag: () => "flag-breach" },
+    { key: "warehouse", label: "Warehouse" },
+  ], temp.rows, "No excursion recorded in this period.");
+
+  table(document.getElementById("tbl-returns"), [
+    { key: "ref", label: "Reference" },
+    { key: "date", label: "Date" },
+    { key: "type", label: "Type", flag: r => r.type === "Recall" ? "flag-breach" : "" },
+    { key: "client", label: "Client" },
+    { key: "item", label: "Item" },
+    { key: "batch", label: "Batch" },
+    { key: "qty", label: "Qty", num: true },
+    { key: "reason", label: "Reason" },
+    { key: "condition", label: "Condition", flag: r => r.condition === "Non-saleable" ? "flag-watch" : "" },
+    { key: "action", label: "Action" },
+  ], ret.rows, "Nothing returned in this period.");
+}
+
 const LOADERS = {
   overview: loadOverview,
   inventory: loadInventory,
   dispatch: loadDispatch,
+  warehouse: loadWarehouse,
+  compliance: loadCompliance,
   complaints: loadComplaints,
 };
 
