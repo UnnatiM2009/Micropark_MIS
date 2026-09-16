@@ -35,6 +35,16 @@ ENDPOINTS = {
     "/api/pending-orders": lambda w, d: kpis.pending_orders(w, d),
     "/api/transporters": lambda w, d: kpis.transporters(w, d),
     "/api/complaints": lambda w, d: kpis.complaints(w, d),
+    "/api/company-dispatch": lambda w, d: kpis.company_dispatch(w, d),
+    "/api/order-vs-dispatch": lambda w, d: kpis.order_vs_dispatch(w, d),
+    "/api/delivery-status": lambda w, d: kpis.delivery_status(w, d),
+    "/api/picking-status": lambda w, d: kpis.picking_status(w, d),
+    "/api/pending-grn": lambda w, d: kpis.pending_grn(w, d),
+    "/api/reconciliation": lambda w, d: kpis.reconciliation(w, d),
+    "/api/batch-stock": lambda w, d: kpis.batch_stock(w),
+    "/api/fefo": lambda w, d: kpis.fefo(w, d),
+    "/api/returns": lambda w, d: kpis.returns(w, d),
+    "/api/temperature": lambda w, d: kpis.temperature(w, d),
 }
 
 
