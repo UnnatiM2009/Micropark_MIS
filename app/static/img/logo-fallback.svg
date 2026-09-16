@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 690 126" role="img" aria-label="Micropark Logistics Private Limited">
+  <title>Micropark Logistics Private Limited</title>
+
+  <!-- wide, flat-topped navy ring, open at the bottom centre -->
+  <path d="M83.5 105.4 A 95 42 0 1 1 116.5 105.4"
+        fill="none" stroke="#2B2E83" stroke-width="16" stroke-linecap="butt"/>
+
+  <!-- grey wireframe globe, crossing the ring at top and bottom -->
+  <g fill="none" stroke="#6E6E6E" stroke-width="1.7">
+    <circle cx="100" cy="60" r="45"/>
+    <ellipse cx="100" cy="60" rx="8" ry="45"/>
+    <ellipse cx="100" cy="60" rx="22" ry="45"/>
+    <ellipse cx="100" cy="60" rx="34.5" ry="45"/>
+  </g>
+
+  <!-- two green sweeps that cross below the centre and rise to the corners -->
+  <g stroke="#0E8A43" stroke-width="16" fill="none" stroke-linecap="butt">
+    <path d="M122 99 C 102 99, 80 92, 62 62"/>
+    <path d="M78 99 C 98 99, 120 92, 138 62"/>
+  </g>
+  <g fill="#0E8A43">
+    <path d="M45.6 34.6 L78.3 52.2 L45.7 71.8 Z"/>
+    <path d="M154.4 34.6 L121.7 52.2 L154.3 71.8 Z"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="212" y="68"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="46" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#0E8A43">Micro</tspan><tspan fill="#2B2E83">park Logistics</tspan>
+  </text>
+  <text x="215" y="100"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="23" font-weight="400" fill="#8C8C8C">Private Limited</text>
+</svg>

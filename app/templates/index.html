@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10203c">
+<title>Micropark Logistics - Pharma Operations MIS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+<header>
+  <div class="head-inner">
+    <a class="brand" href="/">
+      <span class="logo-plate">
+        <img id="logo-img" src="/logo" alt="Micropark Logistics Private Limited">
+      </span>
+      <span class="brand-sub">Pharma warehousing and C&amp;F operations MIS</span>
+    </a>
+    <div class="controls">
+      <label for="warehouse">Warehouse</label>
+      <select id="warehouse"></select>
+      <label for="period">Period</label>
+      <select id="period">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button class="btn" id="refresh" type="button">Refresh</button>
+    </div>
+  </div>
+</header>
+
+<div class="meta-bar">
+  <span class="chip" id="source-chip">Loading</span>
+  <span id="updated"></span>
+  <span id="today"></span>
+</div>
+
+<div class="wrap">
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="overview">Overview</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="inventory">Inventory</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="dispatch">Dispatch</button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="complaints">Complaints</button>
+  </nav>
+
+  <div class="kpi-strip" id="kpis"></div>
+
+  <!-- ---------------------------------------------------------- overview -->
+  <section id="panel-overview">
+    <div class="grid wide-left" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Inward against dispatch</h2>
+        <p class="sub">Units handled each day</p>
+        <div class="chart-box"><canvas id="ch-trend"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Warehouse-wise volume</h2>
+        <p class="sub">Units in and out for the period</p>
+        <div class="chart-box"><canvas id="ch-wh"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="panel">
+        <h2>Top clients by dispatch</h2>
+        <p class="sub">Units dispatched in the period</p>
+        <div class="chart-box tall"><canvas id="ch-clients"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Productivity and space</h2>
+        <p class="sub">Lines handled per man-hour, and pallet positions occupied</p>
+        <div class="chart-box tall"><canvas id="ch-prod"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- inventory -->
+  <section id="panel-inventory" class="hidden">
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Stock by time left to expiry</h2>
+        <p class="sub">Units, current batch position</p>
+        <div class="chart-box"><canvas id="ch-expiry"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Stock ageing</h2>
+        <p class="sub">Units by days since the batch last moved</p>
+        <div class="chart-box"><canvas id="ch-ageing"></canvas></div>
+      </div>
+    </div>
+    <div class="grid two">
+      <div class="panel">
+        <h2>Highest stock items</h2>
+        <p class="sub">Units in hand</p>
+        <div class="chart-box tall"><canvas id="ch-stock"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Batches expiring within 90 days</h2>
+        <p class="sub">Action needed, earliest first</p>
+        <div class="table-scroll" style="max-height:320px;overflow-y:auto">
+          <table id="tbl-expiry"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- dispatch -->
+  <section id="panel-dispatch" class="hidden">
+    <div class="grid two" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>Why orders are pending</h2>
+        <p class="sub">Units held up, by reason</p>
+        <div class="chart-box"><canvas id="ch-reasons"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Transporter performance</h2>
+        <p class="sub">Delivery reliability for the period</p>
+        <div class="table-scroll"><table id="tbl-transport"></table></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Pending orders</h2>
+      <p class="sub">Oldest first</p>
+      <div class="table-scroll" style="max-height:420px;overflow-y:auto">
+        <table id="tbl-pending"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- complaints -->
+  <section id="panel-complaints" class="hidden">
+    <div class="kpi-strip" id="cmp-tiles" style="margin-bottom:16px"></div>
+    <div class="grid three" style="margin-bottom:16px">
+      <div class="panel">
+        <h2>By category</h2>
+        <p class="sub">All complaints in the period</p>
+        <div class="chart-box short"><canvas id="ch-cmp-cat"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>By root cause</h2>
+        <p class="sub">Closed complaints only</p>
+        <div class="chart-box short"><canvas id="ch-cmp-cause"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Ageing of open complaints</h2>
+        <p class="sub">Days since it was raised</p>
+        <div class="chart-box short"><canvas id="ch-cmp-age"></canvas></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Open complaints</h2>
+      <p class="sub">Oldest first</p>
+      <div class="table-scroll" style="max-height:380px;overflow-y:auto">
+        <table id="tbl-cmp"></table>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Micropark Logistics Private Limited</strong> &nbsp;&middot;&nbsp;
+      18 KM Milestone, Amravati Road, Gondkhairi, Nagpur 440023 &nbsp;&middot;&nbsp;
+      07118-662333 &nbsp;&middot;&nbsp; info@microparkindia.com</p>
+    <p>Distribution, warehousing and C&amp;F agency operations for over 40 pharma companies,
+      across eight locations and more than seven lakh square feet of warehousing space.</p>
+    <p>This dashboard covers pharma handling only. The automobile dealership business is
+      reported separately. Figures shown in amber or red have crossed the set limit.</p>
+  </footer>
+</div>
+
+<script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
